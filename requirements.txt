@@ -1,0 +1,25 @@
+# ============================================================================
+# Dependencias Python del contenedor de Airflow
+# ============================================================================
+# Estas librerías se instalan encima de la imagen base apache/airflow.
+# Incluimos dbt para que pueda ser invocado desde los DAGs.
+# ============================================================================
+
+# --- dbt core + adaptador Postgres ---
+# dbt-postgres arrastra a dbt-core como dependencia (versión compatible)
+dbt-postgres==1.8.2
+
+# --- Extracción de datos del SNIES ---
+# Los archivos del SNIES son .xlsx (a veces .xlsb para años antiguos)
+pandas==2.2.2
+openpyxl==3.1.5
+pyxlsb==1.0.10
+requests==2.32.3
+
+# --- Conectividad con Postgres ---
+# psycopg2-binary ya viene en la imagen base pero la fijamos explícitamente
+psycopg2-binary==2.9.9
+SQLAlchemy>=1.4,<2
+
+# --- Utilidades ---
+python-slugify==8.0.4

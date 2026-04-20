@@ -1,0 +1,85 @@
+version: 2
+
+# =============================================================================
+# Sources Bronze
+# =============================================================================
+# Aquí declaramos las tablas de la capa Bronze que dbt puede leer.
+# Estas tablas las crea y alimenta Airflow (no dbt).
+#
+# Uso en modelos Silver:  {{ source('bronze', 'matriculados_raw') }}
+# =============================================================================
+
+sources:
+  - name: bronze
+    description: >
+      Capa de datos crudos cargada por Airflow desde los archivos .xlsx del SNIES.
+      Todas las columnas son TEXT (schema-on-read). La fuente de verdad
+      del linaje vive aquí (_ingested_at, _source_file, _row_hash, _dag_run_id).
+    database: "{{ env_var('DWH_DB', 'snies_dwh') }}"
+    schema: bronze
+
+    # -----------------------------------------------------------------------
+    # Freshness check: alerta si los datos no se actualizan desde hace X tiempo.
+    # Anual porque SNIES publica 1 vez al año.
+    # -----------------------------------------------------------------------
+    freshness:
+      warn_after: {count: 400, period: day}
+      error_after: {count: 800, period: day}
+    loaded_at_field: _ingested_at
+
+    tables:
+      - name: matriculados_raw
+        description: >
+          Matriculados en IES Colombia, granularidad:
+          (IES × programa × nivel × sexo × año × semestre).
+          Cargado por el DAG snies_ingest / snies_backfill_all.
+        columns:
+          - name: codigo_institucion
+            description: Código SNIES de la IES (ej. 1101 = UN Colombia).
+            tests:
+              - not_null
+          - name: institucion_educacion_superior_ies
+            description: Nombre de la IES (puede variar entre años).
+          - name: caracter_ies
+            description: >
+              Carácter académico: Universidad, Institución Universitaria,
+              Institución Tecnológica, Institución Técnica Profesional.
+          - name: departamento_domicilio_ies
+            description: Departamento de domicilio de la IES. 'Bogotá D.C.' (2022) / 'Bogotá, D.C.' (2023+).
+          - name: anio
+            description: Año académico.
+            tests:
+              - not_null
+          - name: semestre
+            description: Semestre (1 o 2).
+          - name: matriculados
+            description: Número de estudiantes matriculados para esa granularidad.
+
+      - name: docentes_raw
+        description: >
+          Docentes en IES Colombia, granularidad:
+          (IES × sexo × nivel_formación × dedicación × tipo_contrato × año × semestre).
+        columns:
+          - name: codigo_institucion
+            description: Código SNIES de la IES.
+            tests:
+              - not_null
+          - name: institucion_educacion_superior_ies
+            description: Nombre de la IES.
+          - name: caracter_ies
+            description: Carácter académico.
+          - name: departamento_domicilio_ies
+            description: Departamento de domicilio de la IES.
+          - name: anio
+            description: Año académico.
+            tests:
+              - not_null
+          - name: semestre
+            description: Semestre (1 o 2).
+          - name: docentes
+            description: Número de docentes para esa granularidad.
+
+      - name: _ingestion_log
+        description: >
+          Log de ejecuciones del pipeline de ingesta. No se usa como source
+          de modelos dbt, pero se documenta para auditoría.

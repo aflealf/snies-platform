@@ -1,0 +1,81 @@
+version: 2
+
+models:
+  - name: stg_ies
+    description: >
+      Dimensión de IES deduplicada desde Bronze. Una fila por código SNIES,
+      con la versión más reciente de sus atributos (maneja renombres entre años).
+    columns:
+      - name: codigo_snies
+        description: Código SNIES (int). PK lógica de esta tabla.
+        tests:
+          - not_null
+          - unique
+      - name: nombre_ies
+        description: Nombre oficial de la IES.
+        tests:
+          - not_null
+      - name: caracter_ies
+        description: Carácter académico (Universidad, IU, etc.).
+      - name: sector_ies
+        description: Oficial o Privada.
+
+  - name: stg_matriculados_bogota
+    description: >
+      Matriculados agregados por (IES × año). Filtrado a universidades de Bogotá.
+      Agregación SUM de semestres/programas/niveles/sexos.
+    columns:
+      - name: codigo_snies
+        description: FK hacia stg_ies.codigo_snies.
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_ies')
+              field: codigo_snies
+      - name: anio
+        description: Año académico.
+        tests:
+          - not_null
+          - accepted_values:
+              values: [2022, 2023, 2024]
+      - name: total_matriculados
+        description: Suma de matriculados del año.
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: semestres_presentes
+        description: Debería ser 2 para años completos.
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 1
+              max_value: 2
+
+    # Tests a nivel de modelo (combinación de columnas)
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [codigo_snies, anio]
+
+  - name: stg_docentes_bogota
+    description: >
+      Docentes agregados por (IES × año). Filtrado a universidades de Bogotá.
+    columns:
+      - name: codigo_snies
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_ies')
+              field: codigo_snies
+      - name: anio
+        tests:
+          - not_null
+          - accepted_values:
+              values: [2022, 2023, 2024]
+      - name: total_docentes
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [codigo_snies, anio]

@@ -1,0 +1,48 @@
+# =============================================================================
+# profiles.yml — Perfil de conexión dbt al DWH
+# =============================================================================
+# Este archivo vive en /opt/airflow/dbt dentro del contenedor (montado como
+# volumen desde ./dbt). La variable de entorno DBT_PROFILES_DIR apunta aquí.
+#
+# Las credenciales vienen de variables de entorno que ya están definidas en
+# docker-compose.yaml (DWH_HOST, DWH_USER, DWH_PASSWORD, etc.).
+# Así nunca hay secretos en el repo.
+# =============================================================================
+
+snies:
+  target: dev
+
+  outputs:
+    # -------------------------------------------------------------------------
+    # Target 'dev': el que usamos en Docker Compose
+    # -------------------------------------------------------------------------
+    dev:
+      type: postgres
+      host: "{{ env_var('DWH_HOST', 'dwh-postgres') }}"
+      port: "{{ env_var('DWH_PORT', '5432') | int }}"
+      user: "{{ env_var('DWH_USER') }}"
+      password: "{{ env_var('DWH_PASSWORD') }}"
+      dbname: "{{ env_var('DWH_DB') }}"
+
+      # Schema base; dbt creará silver y gold basándose en la config de models.
+      # El schema 'public' se usa si algún modelo no declara +schema.
+      schema: public
+
+      threads: 4          # paralelismo de dbt al correr modelos
+      keepalives_idle: 0
+      connect_timeout: 10
+
+    # -------------------------------------------------------------------------
+    # Target 'prod': plantilla para futuro (RDS, Cloud SQL, etc.)
+    # -------------------------------------------------------------------------
+    # Se activa con:  dbt run --target prod
+    prod:
+      type: postgres
+      host: "{{ env_var('DWH_HOST_PROD', '') }}"
+      port: "{{ env_var('DWH_PORT_PROD', '5432') | int }}"
+      user: "{{ env_var('DWH_USER_PROD', '') }}"
+      password: "{{ env_var('DWH_PASSWORD_PROD', '') }}"
+      dbname: "{{ env_var('DWH_DB_PROD', '') }}"
+      schema: public
+      threads: 8
+      sslmode: require

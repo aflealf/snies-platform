@@ -1,0 +1,34 @@
+version: 2
+
+seeds:
+  - name: ies_sue
+    description: >
+      Códigos SNIES de las sedes que pertenecen a universidades del Sistema
+      Universitario Estatal (SUE). IMPORTANTE: una universidad SUE puede tener
+      VARIOS códigos SNIES (uno por sede). Por ejemplo, la Universidad Nacional
+      tiene 7 códigos (uno por cada sede: Bogotá, Medellín, Manizales, Palmira,
+      Amazonas, San Andrés, Cesar).
+
+      Fuente: validado contra bronze.matriculados_raw filtrando
+      sector_ies='Oficial' AND caracter_ies='Universidad'.
+
+      Se usa en dim_ies con un LEFT JOIN por codigo_snies para marcar es_sue.
+    columns:
+      - name: codigo_snies
+        description: Código SNIES de la sede (no de la universidad legal).
+        tests:
+          - not_null
+          - unique
+      - name: nombre_oficial
+        description: Nombre oficial tal como aparece en el SNIES.
+        tests:
+          - not_null
+      - name: departamento_principal
+        description: Departamento donde opera esta sede.
+      - name: universidad_sue
+        description: >
+          Nombre canónico de la universidad legal a la que pertenece esta sede.
+          Útil para agregaciones a nivel de universidad legal (no de sede).
+        tests:
+          - not_null
+

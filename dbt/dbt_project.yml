@@ -1,0 +1,84 @@
+# =============================================================================
+# dbt_project.yml — SNIES Data Platform
+# =============================================================================
+# Configuración raíz del proyecto dbt. Define cómo se materializan los modelos
+# por capa (Bronze/Silver/Gold) y dónde viven en Postgres.
+# =============================================================================
+
+name: 'snies'
+version: '1.0.0'
+config-version: 2
+
+profile: 'snies'
+
+# -----------------------------------------------------------------------------
+# Rutas de componentes
+# -----------------------------------------------------------------------------
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+  - "logs"
+
+# -----------------------------------------------------------------------------
+# Configuración de modelos por capa
+# -----------------------------------------------------------------------------
+# Estrategia de materialización:
+#   - bronze: sin materialización propia (es raw data gestionada por Airflow)
+#   - silver: materialized=view (rápido de recrear, siempre fresco)
+#   - gold:   materialized=table (para queries de BI rápidas desde Tableau)
+# -----------------------------------------------------------------------------
+models:
+  snies:
+    # Capa Silver: vistas SQL sobre Bronze. Baratas de recomputar.
+    silver:
+      +materialized: view
+      +schema: silver   # apunta al schema silver en Postgres
+
+    # Capa Gold: tablas materializadas. Optimizadas para Tableau/Metabase.
+    gold:
+      +materialized: table
+      +schema: gold
+
+# -----------------------------------------------------------------------------
+# Configuración de seeds (CSV que cargamos como tablas)
+# -----------------------------------------------------------------------------
+seeds:
+  snies:
+    +schema: silver           # seeds viven en silver como referencias
+    ies_sue:
+      +column_types:
+        # INTEGER para poder hacer join directo con stg_ies.codigo_snies
+        codigo_snies: integer
+        nombre_oficial: varchar(200)
+        departamento_principal: varchar(100)
+        universidad_sue: varchar(200)
+
+# -----------------------------------------------------------------------------
+# Configuración de tests
+# -----------------------------------------------------------------------------
+tests:
+  +store_failures: true       # almacena filas que fallan tests (debug fácil)
+  +severity: error            # por defecto error; override por modelo si es warning
+
+# -----------------------------------------------------------------------------
+# Metadatos del proyecto (visibles en dbt docs)
+# -----------------------------------------------------------------------------
+vars:
+  # Lista de carácter académico que consideramos "universidad" para este reto.
+  # Cambiar aquí, no en los modelos, si el negocio decide ampliar/restringir.
+  #
+  # IMPORTANTE: el SNIES usa literalmente "Institución Universitaria/Escuela Tecnológica"
+  # (con el slash). Verificado contra los datos reales en bronze.matriculados_raw.
+  caracter_universidad:
+    - 'Universidad'
+    - 'Institución Universitaria/Escuela Tecnológica'
+
+  # Patrón para identificar Bogotá en los datos crudos.
+  # El SNIES usa 'Bogotá D.C.' (2022) y 'Bogotá, D.C.' (2023+).
+  bogota_pattern: 'BOGOT%'

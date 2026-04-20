@@ -1,0 +1,11 @@
+# =============================================================================
+# packages.yml — Dependencias del proyecto dbt
+# =============================================================================
+# Instalar con:  dbt deps
+# =============================================================================
+
+packages:
+  # dbt_utils: librería estándar de utilidades y tests.
+  # Versión fijada para reproducibilidad.
+  - package: dbt-labs/dbt_utils
+    version: 1.3.0

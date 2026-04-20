@@ -1,0 +1,101 @@
+version: 2
+
+models:
+  - name: dim_ies
+    description: >
+      Dimensión de IES en Gold. Solo universidades (Universidad + IU) de Bogotá.
+      Incluye el atributo es_sue que distingue universidades del Sistema
+      Universitario Estatal.
+    columns:
+      - name: codigo_snies
+        description: PK. Código SNIES numérico.
+        tests:
+          - not_null
+          - unique
+      - name: nombre_ies
+        description: Nombre oficial de la IES.
+        tests:
+          - not_null
+      - name: sector_ies
+        description: Oficial (pública) o Privada.
+        tests:
+          - accepted_values:
+              values: ['Oficial', 'Privada']
+      - name: caracter_ies
+        description: >
+          Carácter académico. El SNIES usa 3 valores válidos para el conjunto
+          que consideramos "universidades" en este reto.
+        tests:
+          - accepted_values:
+              values:
+                - 'Universidad'
+                - 'Institución Universitaria'
+                - 'Institución Universitaria/Escuela Tecnológica'
+      - name: es_sue
+        description: ⭐ Atributo Plus — pertenencia al Sistema Universitario Estatal.
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true, false]
+
+  - name: dim_tiempo
+    description: Dimensión temporal con granularidad anual.
+    columns:
+      - name: anio
+        description: PK. Año académico.
+        tests:
+          - not_null
+          - unique
+          - accepted_values:
+              values: [2022, 2023, 2024]
+
+  - name: fact_capacidad_academica
+    description: >
+      ⭐ HECHO PRINCIPAL. Relación Estudiante por Docente de las universidades
+      de Bogotá, años 2022-2024. Fuente para Tableau/Metabase.
+    columns:
+      - name: codigo_snies
+        description: FK hacia dim_ies.
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_ies')
+              field: codigo_snies
+      - name: anio
+        description: FK hacia dim_tiempo.
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_tiempo')
+              field: anio
+      - name: total_matriculados
+        description: Total anual (suma de semestres) de matriculados.
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: total_docentes
+        description: Total anual (suma de semestres) de docentes.
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: ratio_estudiante_docente
+        description: ⭐ Métrica principal del reto.
+        # No requerimos not_null: puede ser NULL si total_docentes = 0.
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+              config:
+                where: "ratio_estudiante_docente IS NOT NULL"
+      - name: flag_calidad
+        description: Flag de calidad para resaltar outliers en BI.
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['ok', 'sin_docentes', 'sin_matriculados', 'docentes_bajos', 'matriculados_bajos']
+
+    # Tests a nivel de tabla
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [codigo_snies, anio]
