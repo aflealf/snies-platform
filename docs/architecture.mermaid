@@ -1,0 +1,82 @@
+flowchart TB
+    subgraph EXT["🌐 FUENTE EXTERNA"]
+        SNIES["SNIES Portal<br/>snies.mineducacion.gov.co<br/>Archivos .xlsx por año"]
+    end
+
+    subgraph DOCKER["🐳 DOCKER COMPOSE NETWORK"]
+
+        subgraph ORQ["⚙️ CAPA DE ORQUESTACIÓN (Airflow 2.9)"]
+            AIRFLOW_SCHED["Scheduler<br/>LocalExecutor"]
+            AIRFLOW_WEB["Webserver<br/>UI :8080"]
+            AIRFLOW_DB[("Postgres<br/>Metadata<br/>Airflow")]
+        end
+
+        subgraph DAGS["📋 DAGs"]
+            DAG_INGEST["snies_ingest<br/>━━━━━━━━━━━<br/>• Parametrizado por año<br/>• Extract + Load a Bronze<br/>• Idempotente"]
+            DAG_BACKFILL["snies_backfill_all<br/>━━━━━━━━━━━<br/>• Dynamic Task Mapping<br/>• Todos los años × perfiles<br/>• Paralelismo limitado"]
+            DAG_TRANSFORM["snies_transform<br/>━━━━━━━━━━━<br/>• dbt_deps<br/>• dbt_seed<br/>• dbt_run_silver<br/>• dbt_run_gold<br/>• dbt_test (49)"]
+        end
+
+        DATASET{{"📦 Airflow Dataset<br/>dwh://bronze/updated"}}
+
+        subgraph DWH["🗄️ DATA WAREHOUSE (PostgreSQL 16)"]
+            BRONZE[("🥉 BRONZE<br/>━━━━━━━━━<br/>• matriculados_raw (217K)<br/>• docentes_raw (50K)<br/>• _ingestion_log<br/>• Linaje: _ingested_at,<br/>  _source_file, _row_hash")]
+            SILVER[("🥈 SILVER<br/>━━━━━━━━━<br/>• stg_ies (115)<br/>• stg_matriculados_bogota<br/>• stg_docentes_bogota<br/>• ies_sue seed (51)<br/>• sector_ies normalizado")]
+            GOLD[("🥇 GOLD<br/>━━━━━━━━━<br/>• dim_ies (91, +es_sue)<br/>• dim_tiempo (3)<br/>• fact_capacidad_academica (265)<br/>• ⭐ ratio_estudiante_docente")]
+        end
+
+        subgraph TRANSF["🔧 CAPA DE TRANSFORMACIÓN (dbt 1.8)"]
+            DBT["dbt-core + dbt-postgres<br/>━━━━━━━━━━━━━━<br/>• 6 modelos SQL<br/>• 49 tests de calidad<br/>• Lineage & Docs<br/>• Macros reutilizables"]
+        end
+
+        subgraph CONS["📊 CAPA DE CONSUMO"]
+            METABASE["Metabase<br/>:3000<br/>(BI de demo)"]
+            TABLEAU["🟢 Tableau<br/>:5432 expuesto<br/>(conexión externa)"]
+        end
+    end
+
+    %% Flujos de ingesta
+    SNIES -->|HTTPS .xlsx| DAG_INGEST
+    SNIES -->|HTTPS .xlsx| DAG_BACKFILL
+    DAG_INGEST -->|pandas + SQLAlchemy| BRONZE
+    DAG_BACKFILL -->|pandas + SQLAlchemy| BRONZE
+
+    %% Encadenamiento con Datasets
+    DAG_INGEST -.->|publica| DATASET
+    DAG_BACKFILL -.->|publica| DATASET
+    DATASET -.->|dispara| DAG_TRANSFORM
+
+    %% Control
+    AIRFLOW_SCHED -.->|gestiona| DAG_INGEST
+    AIRFLOW_SCHED -.->|gestiona| DAG_BACKFILL
+    AIRFLOW_SCHED -.->|gestiona| DAG_TRANSFORM
+    AIRFLOW_SCHED <-->|estado| AIRFLOW_DB
+    AIRFLOW_WEB <-->|estado| AIRFLOW_DB
+
+    %% Transformación
+    DAG_TRANSFORM -->|ejecuta| DBT
+    DBT -->|SELECT FROM| BRONZE
+    DBT -->|materializa vistas| SILVER
+    DBT -->|materializa tablas| GOLD
+
+    %% Consumo
+    GOLD -->|JDBC/ODBC| METABASE
+    GOLD -->|PostgreSQL Connector| TABLEAU
+
+    classDef bronze fill:#CD7F32,stroke:#000,color:#fff
+    classDef silver fill:#C0C0C0,stroke:#000,color:#000
+    classDef gold fill:#FFD700,stroke:#000,color:#000
+    classDef ext fill:#4A90E2,stroke:#000,color:#fff
+    classDef orq fill:#017CEE,stroke:#000,color:#fff
+    classDef transf fill:#FF694B,stroke:#000,color:#fff
+    classDef cons fill:#509EE3,stroke:#000,color:#fff
+    classDef dataset fill:#9D4EDD,stroke:#000,color:#fff
+
+    class BRONZE bronze
+    class SILVER silver
+    class GOLD gold
+    class SNIES ext
+    class AIRFLOW_SCHED,AIRFLOW_WEB,AIRFLOW_DB,DAG_INGEST,DAG_BACKFILL,DAG_TRANSFORM orq
+    class DBT transf
+    class METABASE,TABLEAU cons
+    class DATASET dataset
